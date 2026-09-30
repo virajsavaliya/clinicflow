@@ -1,0 +1,78 @@
+services:
+  # MySQL Database Service
+  mysql:
+    image: mysql:8.0
+    container_name: clinicflow_mysql
+    command: --default-authentication-plugin=mysql_native_password --require-secure-transport=OFF
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: clinicflow
+      MYSQL_USER: clinicflow
+      MYSQL_PASSWORD: clinicflow123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - clinicflow_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      timeout: 20s
+      retries: 10
+
+  # PHP FPM Service
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clinicflow_php
+    working_dir: /var/www
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: clinicflow
+      DB_USERNAME: clinicflow
+      DB_PASSWORD: clinicflow123
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_KEY: "base64:Ub/XC9bU2OqAceS7thqK/fdagEyPtAWQWEAeg6mtDrI="
+    volumes:
+      - .:/var/www
+    networks:
+      - clinicflow_network
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # Nginx Web Server Service
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: clinicflow_nginx
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www
+    networks:
+      - clinicflow_network
+    depends_on:
+      - php
+
+  # Redis Cache Service (Optional)
+  redis:
+    image: redis:7-alpine
+    container_name: clinicflow_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - clinicflow_network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  clinicflow_network:
+    driver: bridge
